@@ -54,6 +54,7 @@ class ImageView(QMainWindow):
                 self.setGeometry(rect)
 
                 self.setMinimumSize(MIN_WINDOW_WIDTH, round(MIN_WINDOW_WIDTH / self.width_of_img * self.height_of_img))
+
                 self.update()
         except Exception:
             QMessageBox.critical(self, 'Ошибка', 'Не удалось открыть изображение')
@@ -63,21 +64,21 @@ class ImageView(QMainWindow):
             painter = QPainter()
 
             painter.begin(self)
-            pix = self.pixmap.scaledToWidth(self.width())
+            pix = self.pixmap.scaledToWidth(self.width() - 20)
             p_h = pix.height()
             w_h = self.height()
             p_w = pix.width()
             w_w = self.width()
 
-            if p_h > w_h:
-                pix = self.pixmap.scaledToHeight(w_h)
+            if p_h > w_h - 45:
+                pix = self.pixmap.scaledToHeight(w_h - 45)
                 p_h = pix.height()
                 p_w = pix.width()
-                center_w = (w_w - p_w) // 2
-                painter.drawPixmap(10 + center_w, 35, p_w - 20, p_h - 45, pix)
+                center_w = (w_w - p_w) // 2 - 10
+                painter.drawPixmap(10 + center_w, 35, p_w, p_h, pix)
             else:
-                center_h = (w_h - p_h) // 2
-                painter.drawPixmap(10, 35 + center_h, p_w - 20, p_h - 45, pix)
+                center_h = (w_h - p_h - 45) // 2
+                painter.drawPixmap(10, 35 + center_h, p_w, p_h, pix)
 
             painter.end()
 
