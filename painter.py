@@ -2,15 +2,19 @@ from uti_api import ImageUti, WAYS_TO_CONVERT, convert_password
 from PIL import Image, ImageDraw
 from PyQt6 import uic
 from PyQt6.QtWidgets import (QMainWindow, QApplication, QFileDialog, QMessageBox, QInputDialog, QColorDialog,
-                             QPushButton, QSlider, QLabel)
-from PyQt6.QtGui import QIcon, QPainter, QPixmap, QImage, QColor
-from PyQt6.QtCore import QSize
+                             QPushButton, QSlider, QLabel, QCheckBox, QSpinBox)
+from PyQt6.QtGui import QIcon, QPainter, QPixmap, QImage, QColor, QShortcut, QKeySequence
+from PyQt6.QtCore import QSize, Qt
 import sys
+from math import sqrt
+
+
+THEMES = ('По умолчанию',)
 
 
 class InstrumentParams(QMainWindow):
-    def __init__(self, name, instrument, maximum_size):
-        super().__init__()
+    def __init__(self, parent, name, instrument, maximum_size):
+        super().__init__(parent=parent)
 
         attributes_order = ['limit', 'size', 'transperency', 'fill']
         self.localization = {'limit': 'Порог', 'size': 'Размер', 'transperency': 'Непрозрачность', 'fill': 'Заливка',
@@ -18,6 +22,7 @@ class InstrumentParams(QMainWindow):
                         'rectangle': 'Прямоугольник', 'triangle': 'Треугольник', 'line': 'Линия'}
         self.maximum_size = maximum_size
         self.instrument = instrument
+        self.new_params = {}
         
         self.setWindowTitle(self.localization[name])
         
@@ -27,6 +32,7 @@ class InstrumentParams(QMainWindow):
 
     def initUI(self):
         curr_height = 10
+
         for i in self.attributes_names:
             if i == 'size':
                 label = QLabel(self)
@@ -36,12 +42,26 @@ class InstrumentParams(QMainWindow):
                 slider = QSlider(self)
                 slider.setMaximum(self.maximum_size)
                 slider.setMinimum(1)
-                slider.move(50, curr_height)
+                slider.move(190, curr_height + 2)
+                slider.setOrientation(Qt.Orientation.Horizontal)
 
                 if self.instrument[i] is not None:
                     slider.setValue(self.instrument[i])
 
-                curr_height += 20
+                spin_box = QSpinBox(self)
+                spin_box.move(120, curr_height)
+                spin_box.setFixedWidth(65)
+                spin_box.setMinimum(slider.minimum())
+                spin_box.setMaximum(slider.maximum())
+                spin_box.setValue(slider.value())
+
+                self.size_sl = slider
+                self.size_sp = spin_box
+
+                slider.valueChanged.connect(self.size_value_changed)
+                spin_box.valueChanged.connect(self.size_value_changed)
+
+                curr_height += 30
             elif i == 'transperency':
                 label = QLabel(self)
                 label.move(10, curr_height)
@@ -50,10 +70,23 @@ class InstrumentParams(QMainWindow):
                 slider = QSlider(self)
                 slider.setMaximum(255)
                 slider.setMinimum(0)
-                slider.move(50, curr_height)
+                slider.move(190, curr_height + 2)
                 slider.setValue(self.instrument[i])
+                slider.setOrientation(Qt.Orientation.Horizontal)
+                slider.valueChanged.connect(self.transperency_value_changed)
 
-                curr_height += 20
+                spin_box = QSpinBox(self)
+                spin_box.move(120, curr_height)
+                spin_box.setFixedWidth(65)
+                spin_box.setMinimum(slider.minimum())
+                spin_box.setMaximum(slider.maximum())
+                spin_box.setValue(slider.value())
+                spin_box.valueChanged.connect(self.transperency_value_changed)
+
+                self.transperency_sl = slider
+                self.transperency_sp = spin_box
+
+                curr_height += 30
             elif i == 'limit':
                 label = QLabel(self)
                 label.move(10, curr_height)
@@ -62,19 +95,236 @@ class InstrumentParams(QMainWindow):
                 slider = QSlider(self)
                 slider.setMaximum(300)
                 slider.setMinimum(0)
-                slider.move(50, curr_height)
+                slider.move(190, curr_height + 2)
                 slider.setValue(self.instrument[i])
+                slider.setOrientation(Qt.Orientation.Horizontal)
+                slider.valueChanged.connect(self.limit_value_changed)
 
-                curr_height += 20
+                spin_box = QSpinBox(self)
+                spin_box.move(120, curr_height)
+                spin_box.setFixedWidth(65)
+                spin_box.setMinimum(slider.minimum())
+                spin_box.setMaximum(slider.maximum())
+                spin_box.setValue(slider.value())
+                spin_box.valueChanged.connect(self.limit_value_changed)
+
+                self.limit_sl = slider
+                self.limit_sp = spin_box
+
+                curr_height += 30
+            elif i == 'fill':
+                label1 = QLabel(self)
+                label1.move(10, curr_height)
+                label1.setText(self.localization[i])
+
+                label2 = QLabel(self)
+                label2.move(30, curr_height + 20)
+                label2.setText('Цвет заливки:')
+
+                checkbox = QCheckBox(self)
+                checkbox.move(70, curr_height + 1)
+
+                color_button = QPushButton(self)
+                color_button.move(115, curr_height + 20)
+                color_button.setFixedSize(30, 30)
+                color_button.setIconSize(QSize(20, 20))
+                color_button.clicked.connect(self.fill_color_choose)
+
+                if self.instrument[i] is not None:
+                    checkbox.setChecked(True)
+                    color = QColor(*self.instrument[i])
+                    color_button.setIcon(self.get_icon_with_colour(color))
+                    self.new_params['fill'] = [True, color]
+                else:
+                    color_button.setDisabled(True)
+                    self.new_params['fill'] = [False, QColor()]
+
+                checkbox.stateChanged.connect(self.use_fill_changed)
+
+                self.fill_color_button = color_button
+
+                curr_height += 50
+
+        curr_height += 20
+
+        fin_button = QPushButton(self)
+        fin_button.move(40, curr_height)
+        fin_button.setText('Подтвердить')
+        fin_button.clicked.connect(self.fin)
+
+        exit_button = QPushButton(self)
+        exit_button.move(150, curr_height)
+        exit_button.setText('Отмена')
+        exit_button.clicked.connect(self.close)
+
+        curr_height += 40
+
+        self.setFixedSize(290, curr_height)
+
+    def get_icon_with_colour(self, color):
+        image = QImage(35, 35, QImage.Format.Format_RGBA64)
+        image.fill(color)
+        pixmap = QPixmap.fromImage(image)
+        
+        return QIcon(pixmap)
+
+    def limit_value_changed(self, value):
+        self.limit_sl.setValue(value)
+        self.limit_sp.setValue(value)
+        self.new_params['limit'] = value
+
+    def transperency_value_changed(self, value):
+        self.transperency_sl.setValue(value)
+        self.transperency_sp.setValue(value)
+        self.new_params['transperency'] = value
+
+    def size_value_changed(self, value):
+        self.size_sl.setValue(value)
+        self.size_sp.setValue(value)
+        self.new_params['size'] = value
+
+    def use_fill_changed(self, value):
+        self.new_params['fill'][0] = False if value == 0 else True
+
+        if self.new_params['fill'][0]:
+            self.fill_color_button.setDisabled(False)
+        else:
+            self.fill_color_button.setDisabled(True)
+
+    def fill_color_choose(self):
+        if self.instrument['fill'] is None:
+            color = QColorDialog.getColor(parent=self, title='Выбор цвета')
+        else:
+            curr_color = self.new_params.get('fill', [0, QColor(*self.instrument['fill'])])[1]
+
+            color = QColorDialog.getColor(curr_color, self, 'Выбор цвета')
+
+        if color.isValid():
+            self.new_params['fill'][1] = color
+            self.fill_color_button.setIcon(self.get_icon_with_colour(color))
+
+    def fin(self):
+        fin = self.new_params.copy()
+
+        if 'fill' in fin:
+            if fin['fill'][0]:
+                color = fin['fill'][1]
+
+                if color.isValid():
+                    fin['fill'] = (color.red(), color.green(), color.blue())
+                else:
+                    fin['fill'] = None
+            else:
+                fin['fill'] = None
+
+        for i in fin:
+            self.instrument[i] = fin[i]
+
+        self.close()
 
 
+class NewImageDial(QMainWindow):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.curr_color = (255, 255, 255)
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle('Создать')
+        self.setFixedSize(200, 210)
+        
+        self.width_sp = QSpinBox(self)
+        self.width_sp.move(80, 10)
+        self.width_sp.setMinimum(1)
+        self.width_sp.setMaximum(99999)
+        self.width_sp.setValue(1754)
+
+        self.width_l = QLabel(self)
+        self.width_l.setText('Ширина:')
+        self.width_l.move(10, 10)
+
+        self.height_sp = QSpinBox(self)
+        self.height_sp.move(80, 50)
+        self.height_sp.setMinimum(1)
+        self.height_sp.setMaximum(99999)
+        self.height_sp.setValue(1240)
+
+        self.height_l = QLabel(self)
+        self.height_l.setText('Высота:')
+        self.height_l.move(10, 50)
+
+        self.fill_l1 = QLabel(self)
+        self.fill_l1.move(10, 90)
+        self.fill_l1.setText('Заливка')
+
+        self.fill_l2 = QLabel(self)
+        self.fill_l2.move(30, 120)
+        self.fill_l2.setText('Цвет заливки:')
+
+        self.fill_check = QCheckBox(self)
+        self.fill_check.move(70, 91)
+        self.fill_check.setChecked(True)
+        self.fill_check.stateChanged.connect(self.use_fill_changed)
+
+        self.fill_color = QPushButton(self)
+        self.fill_color.move(115, 120)
+        self.fill_color.setFixedSize(30, 30)
+        self.fill_color.setIconSize(QSize(20, 20))
+        self.fill_color.setIcon(self.get_icon_with_colour(QColor(*self.curr_color)))
+        self.fill_color.clicked.connect(self.fill_color_choose)
+
+        self.fin_button = QPushButton(self)
+        self.fin_button.move(10, 170)
+        self.fin_button.setText('ОК')
+        self.fin_button.setFixedWidth(85)
+        self.fin_button.clicked.connect(self.fin)
+
+        self.exit_button = QPushButton(self)
+        self.exit_button.move(105, 170)
+        self.exit_button.setText('Отмена')
+        self.exit_button.setFixedWidth(85)
+        self.exit_button.clicked.connect(self.close)
+
+    def get_icon_with_colour(self, color):
+        image = QImage(35, 35, QImage.Format.Format_RGBA64)
+        image.fill(color)
+        pixmap = QPixmap.fromImage(image)
+        
+        return QIcon(pixmap)
     
+    def fill_color_choose(self):
+        if self.curr_color is None:
+            color = QColorDialog.getColor(parent=self, title='Выбор цвета')
+        else:
+            color = QColorDialog.getColor(QColor(*self.curr_color), self, 'Выбор цвета')
+
+        if color.isValid():
+            self.curr_color = (color.red(), color.green(), color.blue())
+            self.fill_color.setIcon(self.get_icon_with_colour(color))
+
+    def use_fill_changed(self, value):
+        if value:
+            self.fill_color.setDisabled(False)
+        else:
+            self.fill_color.setDisabled(True)
+
+    def fin(self):
+        width = self.width_sp.value()
+        height = self.height_sp.value()
+
+        if self.fill_check.isChecked():
+            image = Image.new('RGBA', (width, height), self.curr_color)
+        else:
+            image = Image.new('RGBA', (width, height))
+        
+        self.parent().load_image(image)
+        self.close()
 
 
 class Painter(QMainWindow):
     def __init__(self):
         super().__init__()
-        uic.loadUi(r'.\UI\painter.ui', self)
+        uic.loadUi(r'UI\painter.ui', self)
         self.initUI()
 
     def initUI(self):
@@ -99,6 +349,12 @@ class Painter(QMainWindow):
 
         self.make_menu()
 
+        for button in self.buttonGroup_2.buttons():
+            tool = button.objectName()[:-7]
+            button.setIcon(QIcon(f'UI/icons/{tool}.png'))
+            button.setIconSize(button.size())
+
+        self.stack_size = 30
         self.image = None
         self.pixmap = None
         self.tool = None
@@ -108,6 +364,10 @@ class Painter(QMainWindow):
         self.show_img_height = None
         self.pre_image = None
         self.prev_point = None
+        self.maximum_size = None
+        self.stack = [None] * self.stack_size
+        self.curr_stack = -1
+        self.changed = False
 
         self.make_params_of_tools()
 
@@ -125,9 +385,20 @@ class Painter(QMainWindow):
 
     def make_menu(self):
         self.open_file_act.triggered.connect(self.open_file)
+        self.new_act.triggered.connect(self.new_file)
+        self.save_uti_act.triggered.connect(self.export_uti)
+        self.save_png_act.triggered.connect(self.export_png)
+        self.exit_act.triggered.connect(self.almost_close)
+        self.back_act.triggered.connect(self.undo)
+        self.straight_act.triggered.connect(self.unundo)
+        self.num_images_act.triggered.connect(self.change_stack_len)
+        self.theme_act.triggered.connect(self.change_theme)
+
+        QShortcut(QKeySequence('CTRL+Z'), self).activated.connect(self.undo)
+        QShortcut(QKeySequence('CTRL+Y'), self).activated.connect(self.unundo)
 
     def make_params_of_tools(self):
-        self.params = {'brush': {'size': None, 'transperency': 255}, 'eraser': {'size': None, 'transperency': 255},
+        self.params = {'brush': {'size': None, 'transperency': 255}, 'eraser': {'size': None, 'transperency': 0},
                        'bucket': {'limit': 10, 'transperency': 255}, 'circle': {'size': None, 'transperency': 255, 'fill': None},
                        'rectangle': {'size': None, 'transperency': 255, 'fill': None},
                        'triangle': {'size': None, 'transperency': 255, 'fill': None}, 'line': {'size': None, 'transperency': 255}}
@@ -145,6 +416,11 @@ class Painter(QMainWindow):
 
             if color is not None:
                 self.current_color = color
+
+                for i in range(12):
+                    self.buttonGroup.buttons()[i].setStyleSheet('')
+
+                self.buttonGroup.buttons()[self.buttonGroup.buttons().index(button)].setStyleSheet('border: 2px solid #3498db;')
             
             self.prev_button_color = (button, self.current_pallete)
 
@@ -161,8 +437,27 @@ class Painter(QMainWindow):
                 buttons[i].setIcon(QIcon())
 
     def tool_change(self, button):
-        self.tool = button.objectName()[:-7]
-        print(self.tools, self.tool)
+        tool = button.objectName()[:-7]
+
+        if self.set_instrument_box.isChecked():
+            if tool in self.params:
+                if self.maximum_size is not None:
+                    max_size = self.maximum_size
+                else:
+                    max_size = 500
+
+                params_dialog = InstrumentParams(self, tool, self.params[tool], max_size)
+                params_dialog.show()
+            else:
+                if tool == 'pipette':
+                    tool = 'Пипетка'
+                QMessageBox.information(self, 'Информация', f'Инструмент "{tool}" не имеет настроек.')
+        else:
+            for i in range(8):
+                self.buttonGroup_2.buttons()[i].setStyleSheet('')
+
+            self.buttonGroup_2.buttons()[self.tools.index(tool)].setStyleSheet('border: 2px solid #3498db;')
+            self.tool = tool
 
     def get_icon_with_colour(self, color):
         image = QImage(35, 35, QImage.Format.Format_RGBA64)
@@ -176,49 +471,155 @@ class Painter(QMainWindow):
 
         if name:  
             try:
-                self.image = ImageUti(Image.open(name))
-                self.pixmap = QPixmap.fromImage(self.image.get_qimage())
-                self.width_of_img = self.pixmap.width()
-                self.height_of_img = self.pixmap.height()
-
-                prefer_size = round(self.width_of_img * self.height_of_img * 30 / 8699840)
-
-                for i in self.params:
-                    if 'size' in self.params[i]:
-                        if self.params[i]['size'] is None:
-                            self.params[i]['size'] = prefer_size
-                self.update()
+                image = Image.open(name)
+                self.load_image(image)
             except Exception:         
                 try:
-                    self.image = ImageUti.import_image(name)
+                    image = ImageUti.import_image(name)
 
-                    if self.image == 'PASSWORD':
+                    if image == 'PASSWORD':
                         password, ok_pressed = QInputDialog.getText(self, 'Пароль', 'Изображение запаролено. Введите пароль:')
 
                         if ok_pressed:
-                            self.image = ImageUti.import_image_with_password(name, convert_password(password))
+                            image = ImageUti.import_image_with_password(name, convert_password(password))
 
-                            if self.image == 'Incorrect password':
+                            if image == 'Incorrect password':
                                 QMessageBox.critical(self, 'Ошибка', 'Неверный пароль.')
-                                self.image = None
+                                image = None
                         else:
-                            self.image = None
+                            image = None
 
-                    if self.image is not None:
+                    if image is not None:
+                        self.image = image
                         self.pixmap = QPixmap.fromImage(self.image.get_qimage())
                         self.width_of_img = self.pixmap.width()
                         self.height_of_img = self.pixmap.height()
 
-                        prefer_size = round(self.width_of_img * self.height_of_img * 30 / 8699840)
+                        s = self.width_of_img * self.height_of_img
+
+                        prefer_size = round(s * 30 / 8699840)
+                        self.maximum_size = round(sqrt(s))
 
                         for i in self.params:
                             if 'size' in self.params[i]:
                                 if self.params[i]['size'] is None:
                                     self.params[i]['size'] = prefer_size
+                                elif self.params[i]['size'] > self.maximum_size:
+                                    self.params[i]['size'] = self.maximum_size
+
+                        self.stack = [None] * self.stack_size
+                        self.curr_stack = -1
+                        self.stack[-1] = ImageUti(self.image.image.copy())
 
                         self.update()
                 except Exception:
                     QMessageBox.critical(self, 'Ошибка', 'Не удалось открыть изображение')
+
+    def load_image(self, image):
+        self.image = ImageUti(image)
+        self.pixmap = QPixmap.fromImage(self.image.get_qimage())
+        self.width_of_img = self.pixmap.width()
+        self.height_of_img = self.pixmap.height()
+        s = self.width_of_img * self.height_of_img
+
+        prefer_size = round(s * 30 / 8699840)
+        self.maximum_size = round(sqrt(s))
+
+        for i in self.params:
+            if 'size' in self.params[i]:
+                if self.params[i]['size'] is None:
+                    self.params[i]['size'] = prefer_size
+                elif self.params[i]['size'] > self.maximum_size:
+                    self.params[i]['size'] = self.maximum_size
+
+        self.stack = [None] * self.stack_size
+        self.curr_stack = -1
+        self.stack[-1] = ImageUti(self.image.image.copy())
+
+        self.update()
+
+    def new_file(self):
+        NewImageDial(self).show()
+
+    def export_uti(self):
+        if self.image is None:
+            QMessageBox.critical(self, 'Ошибка', 'Изображение не открыто!')
+        else:
+            file, _ = QFileDialog.getSaveFileName(self, 'Сохранить файл', filter='Изображение (*.uti)')
+
+            if file:
+                way_titles = [i[1] for i in WAYS_TO_CONVERT]
+                way, ok_pressed = QInputDialog.getItem(self, 'Способ', 'Выберите способ конвертации:', way_titles, 0, False)
+
+                if ok_pressed:
+                    if way == 'Password way':
+                        password, ok_pressed = QInputDialog.getText(self, 'Пароль', 'Введите пароль:')
+
+                        if ok_pressed and password:
+                            try:
+                                self.image.export(file, WAYS_TO_CONVERT[way_titles.index(way)][0], convert_password(password))
+                            except Exception:
+                                QMessageBox.critical(self, 'Ошибка', 'Не удалось экспортировать изображение')
+                            else:
+                                QMessageBox.information(self, 'Информация', 'Успешно!')
+                    else:
+                        try:
+                            self.image.export(file, WAYS_TO_CONVERT[way_titles.index(way)][0])
+                        except Exception:
+                            QMessageBox.critical(self, 'Ошибка', 'Не удалось экспортировать изображение')
+                        else:
+                            QMessageBox.information(self, 'Информация', 'Успешно!')
+
+    def export_png(self):
+        if self.image is None:
+            QMessageBox.critical(self, 'Ошибка', 'Изображение не открыто!')
+        else:
+            file, _ = QFileDialog.getSaveFileName(self, 'Сохранить файл', filter='Изображение (*.png)')
+
+            if file:
+                try:
+                    self.image.image.save(file)
+                except Exception:
+                    QMessageBox.critical(self, 'Ошибка', 'Не удалось экспортировать изображение')
+                else:
+                    QMessageBox.information(self, 'Информация', 'Успешно!')
+
+    def almost_close(self):
+        valid = QMessageBox.question(self, 'Выход', 'Вы уверены?', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+
+        if valid == QMessageBox.StandardButton.Yes:
+            self.close()
+
+    def undo(self):
+        ind = self.curr_stack - 1
+
+        if -self.stack_size < ind < 0:
+            if self.stack[ind] is not None:
+                self.curr_stack = ind
+                self.image = ImageUti(self.stack[ind].image.copy())
+                self.update()
+
+    def unundo(self):
+        ind = self.curr_stack + 1
+
+        if -self.stack_size < ind < 0:
+            if self.stack[ind] is not None:
+                self.curr_stack = ind
+                self.image = ImageUti(self.stack[ind].image.copy())
+                self.update()
+
+    def change_theme(self):
+        theme, ok_pressed = QInputDialog.getItem(self, 'Выбрать тему', 'Выберите тему:', THEMES, 0, False)
+
+        if ok_pressed:
+            theme = THEMES.index(theme)
+
+    def change_stack_len(self):
+        result, ok_pressed = QInputDialog.getInt(self, 'Длина стека', 'Введите новую длину стека:', self.stack_size, 1, 1000)
+
+        if ok_pressed:
+            self.stack_size = result
+            self.stack = self.stack[-self.stack_size:]
 
     def paintEvent(self, event):
         if self.image is not None:
@@ -248,6 +649,7 @@ class Painter(QMainWindow):
             painter.end()
 
     def mousePressEvent(self, mouse):
+        self.changed = False
         pos = mouse.pos()
         x, y = pos.x(), pos.y()
 
@@ -261,23 +663,43 @@ class Painter(QMainWindow):
                 else:
                     self.drawing = True
                     self.pre_image = ImageUti(self.image.image)
+                    self.preview_image(x, y)
             
         return super().mouseMoveEvent(mouse)
 
     def mouseReleaseEvent(self, mouse):
-        if self.drawing:
-            if self.pre_image is not None:
-                self.image = self.pre_image
-                self.pre_image = None
-        self.drawing = False
-        self.prev_point = None
-        self.update()
+        if self.image is not None:
+            if self.drawing:
+                if self.pre_image is not None:
+                    self.image = self.pre_image
+                    self.pre_image = None
+                    
+                    if self.changed:
+                        self.add_image_to_stack(self.image)
+            self.drawing = False
+            self.prev_point = None
+
+            self.update()
+
         return super().mouseMoveEvent(mouse)
 
     def mouseMoveEvent(self, mouse):
         pos = mouse.pos()
         self.preview_image(pos.x(), pos.y())
         return super().mouseMoveEvent(mouse)
+    
+    def add_image_to_stack(self, image):
+        if self.curr_stack != -1:
+            self.stack = self.stack[:self.curr_stack + 1]
+            self.stack.append(ImageUti(image.image.copy()))
+            if len(self.stack) < self.stack_size:
+                self.stack = [None] * (self.stack_size - len(self.stack)) + self.stack
+            else:
+                self.stack = self.stack[-self.stack_size:]
+            self.curr_stack = -1
+        else:
+            self.stack.append(ImageUti(image.image.copy()))
+            self.stack = self.stack[-self.stack_size:]
     
     def preview_image(self, x, y):
         if self.image is not None and self.pixmap is not None:
@@ -298,8 +720,12 @@ class Painter(QMainWindow):
                             if self.prev_point is None:
                                 self.prev_point = curr_point
 
-                            ImageDraw.Draw(self.pre_image.image).line(self.prev_point + curr_point, color, size)
+                            draw = ImageDraw.Draw(self.pre_image.image)
+                            draw.line(self.prev_point + curr_point, color, size)
+                            draw.circle(curr_point, size // 2, color)
+
                             self.prev_point = curr_point
+                            self.changed = True
                             self.update()
                 elif self.tool == 'eraser':
                     size = self.params[self.tool]['size']
@@ -315,8 +741,11 @@ class Painter(QMainWindow):
                         if self.prev_point is None:
                             self.prev_point = curr_point
 
-                        ImageDraw.Draw(self.pre_image.image).line(self.prev_point + curr_point, (0, 0, 0, transperency), size)
+                        draw = ImageDraw.Draw(self.pre_image.image)
+                        draw.line(self.prev_point + curr_point, (0, 0, 0, transperency), size)
+                        draw.circle(curr_point, size // 2, (0, 0, 0, transperency))
                         self.prev_point = curr_point
+                        self.changed = True
                         self.update()
                 elif self.tool == 'line':
                     if self.current_color is not None:
@@ -337,6 +766,7 @@ class Painter(QMainWindow):
                             self.pre_image = ImageUti(self.image.image.copy())
 
                             ImageDraw.Draw(self.pre_image.image).line(self.prev_point + curr_point, color, size)
+                            self.changed = True
                             self.update()
                 elif self.tool == 'circle':
                     if self.current_color is not None:
@@ -363,6 +793,7 @@ class Painter(QMainWindow):
                             y = sorted((y0, y1))
 
                             ImageDraw.Draw(self.pre_image.image).ellipse((x[0], y[0], x[1], y[1]), fill, color, size)
+                            self.changed = True
                             self.update()
                 elif self.tool == 'rectangle':
                     if self.current_color is not None:
@@ -389,6 +820,7 @@ class Painter(QMainWindow):
                             y = sorted((y0, y1))
 
                             ImageDraw.Draw(self.pre_image.image).rectangle((x[0], y[0], x[1], y[1]), fill, color, size)
+                            self.changed = True
                             self.update()
                 elif self.tool == 'triangle':
                     if self.current_color is not None:
@@ -415,10 +847,11 @@ class Painter(QMainWindow):
                             ImageDraw.Draw(self.pre_image.image).polygon(((self.prev_point[0], self.prev_point[1]),
                                                                           (self.prev_point[0] + width // 2, self.prev_point[1] + height),
                                                                           (curr_point[0], curr_point[1] - height)), fill, color, size)
+                            self.changed = True
                             self.update()
 
     def bucket_fill(self, x, y):
-        limit = self.params['bucket']['limit'] # От 0 до 300? (включительно).
+        limit = self.params['bucket']['limit']
         transperency = self.params['bucket']['transperency']
 
         if self.current_color is not None:
@@ -430,6 +863,8 @@ class Painter(QMainWindow):
                      y / self.show_img_height * self.image.image.height)
 
             ImageDraw.floodfill(self.image.image, point, color, thresh=limit)
+            self.add_image_to_stack(self.image)
+
             self.update()
 
     def pipette(self, x, y):
@@ -447,6 +882,11 @@ class Painter(QMainWindow):
 
         self.palletes[pallete][button.num] = color
         self.current_color = color
+
+        for i in range(12):
+            self.buttonGroup.buttons()[i].setStyleSheet('')
+
+        self.buttonGroup.buttons()[self.buttonGroup.buttons().index(button)].setStyleSheet('border: 2px solid #3498db;')
                         
 
 if __name__ == '__main__':
