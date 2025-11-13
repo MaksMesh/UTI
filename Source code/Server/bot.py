@@ -3,7 +3,7 @@ import sqlite3
 import random
 
 
-LICENCE_TEXT = 'Для использования бота, согласитесь с лицензионным соглашением по ссылке !ПОКА НЕТУ)!.'
+LICENCE_TEXT = 'Для использования бота, согласитесь с лицензионным соглашением по ссылке https://github.com/MaksMesh/UTI/blob/main/LICENCE.txt.'
 
 with open('token.txt') as file:
     TOKEN = file.readline().strip()
