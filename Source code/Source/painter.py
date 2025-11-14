@@ -16,9 +16,6 @@ BLACK_THEME = '''
         QMainWindow {
             background-color: #171717;
         }
-        QWidget {
-            background-color: #171717;
-        }
         QComboBox {
             color: #787777;
             background-color: #262626;
@@ -62,9 +59,6 @@ BLACK_THEME = '''
 
 WHITE_THEME = '''
         QMainWindow {
-            background-color: #ebebeb;
-        }
-        QWidget {
             background-color: #ebebeb;
         }
         QComboBox {
@@ -155,7 +149,6 @@ class SaveDataDial(QMainWindow):
 class InstrumentParams(QMainWindow):
     def __init__(self, parent, name, instrument, maximum_size):
         super().__init__(parent=parent)
-
         attributes_order = ['limit', 'size', 'transperency', 'fill']
         self.localization = {'limit': 'Порог', 'size': 'Размер', 'transperency': 'Непрозрачность', 'fill': 'Заливка',
                         'brush': 'Кисть', 'eraser': 'Ластик', 'bucket': 'Заливка', 'circle': 'Круг',
@@ -469,7 +462,7 @@ class Painter(QMainWindow):
         self.load_saved_data()
 
         if len(args) > 1:
-            self.open_file(args[1])
+            self.open_file(name=args[1])
 
     def initUI(self):
         self.setWindowTitle('Редактор')
@@ -629,9 +622,9 @@ class Painter(QMainWindow):
         
         return QIcon(pixmap)
     
-    def open_file(self, name=None):
+    def open_file(self, *args, name=None):
         if name is None:
-            name, _ = QFileDialog.getOpenFileName(self, 'Открыть файл', filter='Изображение (*.uti);;Изображение (*.png)')
+            name, _ = QFileDialog.getOpenFileName(self, 'Открыть файл', filter='Изображение (*.uti);;Изображение (*.png);;Изображение (*)')
 
         if name:  
             try:
@@ -795,6 +788,7 @@ class Painter(QMainWindow):
                 self.pixmap = QPixmap.fromImage(self.pre_image.get_qimage())
             else:
                 self.pixmap = QPixmap.fromImage(self.image.get_qimage())
+
             painter = QPainter()
 
             painter.begin(self)

@@ -115,7 +115,7 @@ DECODE_WAYS = [DECODE_WAY_1, 'PASSWORD', DECODE_WAY_2, DECODE_WAY_3]
 
 class ImageUti:
     def __init__(self, image):
-        self.image = image
+        self.image = image.convert('RGBA')
         self.width = image.width
         self.height = image.height
 
