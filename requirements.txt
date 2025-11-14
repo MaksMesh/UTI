@@ -1,0 +1,4 @@
+PyQt6>=6.9.1
+numpy>=2.2.5
+pillow>=11.1.0
+pyTelegramBotAPI>=4.28.0
